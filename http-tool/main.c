@@ -37,9 +37,14 @@ static void load_url_list(char * f_path)
 	}
 
 	set_url_records(count_url);
-
-
 	fseek(fp, 0, SEEK_SET);
+	
+	
+	while( fgets(buf, 1000, fp) != NULL)
+	{
+		add_record(buf);
+		memset(buf, 0, sizeof(buf));
+	}
 
 	fclose(fp);
 	

@@ -14,6 +14,9 @@ typedef struct {
 	int is_opened;
 	char * host_name;
 	
+	char * send_url;
+	
+	char * dst_url;
 
 } URL_RECORD;
 

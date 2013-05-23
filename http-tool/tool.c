@@ -17,6 +17,8 @@ URL_RECORD * g_head = NULL;
 
 static int g_count = 0;
 
+static int current_idx = 0;
+
 int set_url_records(int count)
 {
 	
@@ -24,10 +26,7 @@ int set_url_records(int count)
 
 	   g_head = (URL_RECORD *) malloc(sizeof(URL_RECORD) * count);
 	   memset(g_head, 0, sizeof(URL_RECORD) * count);
-	   
-	   g_head[1].fd =2;
-	   printf("==========%d\n", (++g_head)->fd);
-		if(g_head == NULL)
+	   	if(g_head == NULL)
 		{
 			return 1;
 		}		
@@ -55,9 +54,33 @@ void release_url_records()
 			}
 		}
 	}
+	g_head = NULL;
 	g_count = 0;
+	current_idx = 0;
 }
 
 void add_record(char * record)
 {
+	if (record == NULL || *record =='\0')
+	{
+		return;
+	}
+
+	if(current_idx >= g_count)
+	{
+		printf("[ERROR] can't add new reocrd, because over cache size.\n");
+		return;
+	}
+
+	char * tmp = record;
+	int idx = 0;
+	int send_flag  = 0;
+	int dst_flag  = 0;
+	while( *tmp++ != '\0')
+	{
+	
+		
+	}
+
+	g_head[current_idx];
 }
