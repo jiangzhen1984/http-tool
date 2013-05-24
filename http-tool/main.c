@@ -73,6 +73,13 @@ int main(int argc, char ** argv)
 	load_url_list(f_path);
 
 	//TODO start sending
+    start_test();
+
+    release_url_records();
+    while(1)
+    {
+        sleep(0xffffff);
+    }
 	
 	return 0;
 }

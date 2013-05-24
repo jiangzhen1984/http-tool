@@ -7,18 +7,37 @@
 //
 // **********************************************************************
 
+#ifndef H_TOOL_H
+#define H_TOOL_H
 
+typedef enum {
+    NOT_OPENED,
+    OPENED, 
+} SOCK_STATE;
+
+typedef enum {
+    UNAVAILABLE,
+    AVAILABLE,
+} HOST_STATE;
+
+typedef enum {
+    NOT_START,
+    TESTING,
+    TESTED
+} TEST_STATE;
 
 typedef struct {
 	int fd;
-	int is_opened;
+	unsigned char  is_opened;
+    unsigned char is_avl;
+    unsigned char is_tested;
 	char * host_name;
-	
+    char * context;
 	char * send_url;
-	
 	char * dst_url;
-
 } URL_RECORD;
+
+
 
 
 int set_url_records(int count);
@@ -30,3 +49,8 @@ void add_record(char * record);
 
 
 
+void start_test();
+
+
+
+#endif
