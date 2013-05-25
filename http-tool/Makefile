@@ -8,4 +8,5 @@ main: clean
 
 
 clean:
+	mkdir -p bin
 	rm -r bin

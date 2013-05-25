@@ -10,6 +10,11 @@
 #ifndef H_TOOL_H
 #define H_TOOL_H
 
+
+#define THREAD_COUNT 4
+
+#define RECORDS_PER_THREAD 50
+
 typedef enum {
     NOT_OPENED,
     OPENED, 
@@ -27,20 +32,23 @@ typedef enum {
 } TEST_STATE;
 
 typedef struct {
-	int fd;
-	unsigned char  is_opened;
+    int fd;
+    unsigned char  is_opened;
     unsigned char is_avl;
     unsigned char is_tested;
-	char * host_name;
+    char * host_name;
     char * context;
-	char * send_url;
-	char * dst_url;
+    char * send_url;
+    char * dst_url;
+    char * host;
 } URL_RECORD;
 
 
 
 
 int set_url_records(int count);
+
+void set_source_url(char * source);
 
 
 void release_url_records();
@@ -50,6 +58,9 @@ void add_record(char * record);
 
 
 void start_test();
+
+
+void start_shoot();
 
 
 

