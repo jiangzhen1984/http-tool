@@ -11,6 +11,9 @@
 #define H_TOOL_H
 
 
+#define HTTP_CODE_NOT_FOUND 404
+
+
 #define THREAD_COUNT 4
 
 #define RECORDS_PER_THREAD 50

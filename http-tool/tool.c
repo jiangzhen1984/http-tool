@@ -69,6 +69,8 @@ static void send_data(URL_RECORD * pR);
 
 static void * send_request_thread(struct range * p_range);
 
+static void read_response(URL_RECORD * pR);
+
 
 
 
@@ -289,7 +291,7 @@ static void * examine_host(URL_RECORD * pR)
 
     if (pR == NULL)
     {
-        printf("[ERROR] incorrect record\n");
+        printf("[ERROR] %s incorrect record\n", __FUNCTION__);
         return NULL;
     }
     
@@ -324,6 +326,8 @@ static void * examine_host(URL_RECORD * pR)
          h[strlen(buf)] ='\0';
          pR->host = h;
         create_socket(pR);// host);
+        send_data(pR);
+        read_response(pR);
     } else {
 	printf("[ERROR] can't get host:%s\n", pR->host_name);
         return;
@@ -381,7 +385,7 @@ static void create_socket(URL_RECORD * pR)
 {
     if(pR == NULL || pR->host == NULL || *(pR->host)=='\0')//|| host == NULL)
     {
-        printf("[ERROR] incorrect parameter\n");
+        printf("[ERROR] %s incorrect parameter\n", __FUNCTION__);
         return;
     }
     int sockfd;
@@ -408,13 +412,17 @@ static void create_socket(URL_RECORD * pR)
        return;
     }
 
-    int current = fcntl(sockfd, F_GETFL);
-    fcntl(sockfd, F_SETFL, O_NONBLOCK | current);
+    //int current = fcntl(sockfd, F_GETFL);
+    //fcntl(sockfd, F_SETFL, O_NONBLOCK | current);
    
     printf("[INFO] saved sock %s:%d  \n", pR->host_name, sockfd);
     pR->fd = sockfd;
     pR->is_opened = OPENED;
     pR->is_avl = AVAILABLE;
+   
+    //check_context(pR);
+    //pthread_t tid;
+    //pthread_create(&tid, NULL, check_context, (void *)pR);
 
 #endif
 }
@@ -433,7 +441,6 @@ void start_shoot()
 	} 
 
 	int i=0;
-	printf("===== start shoot  %d\n", range);
 	for(; i < range; i++)
 	{
         	pthread_t tid;
@@ -447,7 +454,6 @@ void start_shoot()
 		{
 			pr->end = (i+1) * RECORDS_PER_THREAD;
 		}
-		printf("===== start%d   end %d\n", pr->start, pr->end);
         	pthread_create(&tid, NULL, send_request_thread, (void *)pr);
 		
 	}
@@ -477,7 +483,10 @@ static void * send_request_thread(struct range * p_range)
 			URL_RECORD * pR = &g_head[i];
 			if(pR !=NULL)
 			{
+				create_socket(pR);
 				send_data(pR);
+				read_response(pR);
+				//TODO close socket
       				usleep(30);
 			}
 			if(mod - 30 == 0)
@@ -487,8 +496,61 @@ static void * send_request_thread(struct range * p_range)
 			}
 		}
 		
+		sleep(1);
 	}
 	
+}
+
+static void read_response(URL_RECORD * pR)
+{
+    if(pR == NULL)
+    {
+	printf("[ERROR]%s Incorrect parameter\n",__FUNCTION__);
+	return;
+    }
+
+    if(pR->fd <0 || pR->is_opened != OPENED || pR->is_avl != AVAILABLE)
+    {
+	    return;
+    }
+    char buf[500];
+    memset(buf, 0, 500);
+    int ret = read(pR->fd, buf, 500);
+    int i = 0;
+    char * pch =  NULL;
+    if(ret <=0)
+    {
+	goto rt;
+    }
+    pch = strstr(buf, "HTTP/");
+    if(pch == NULL)
+    {
+	goto rt;
+    }
+    pch += 4;
+    char code[3];
+    while(pch != NULL && *pch !='\0' && *pch !='\n')
+    {
+        if(*pch !=' ' && (*(pch-1) == ' '))
+        {
+	   memcpy(code, pch , 3); 
+	   int co = atoi(code);
+	   
+           if(co ==  HTTP_CODE_NOT_FOUND)
+	   {
+		close(pR->fd);
+    		pR->is_opened = NOT_OPENED;
+    		pR->is_avl = UNAVAILABLE;
+           }
+ 	   goto rt; 
+        } 
+	pch++;
+    }
+// TODO set flag
+rt:
+  close(pR->fd);
+  pR->fd = -1;
+    
 }
 
 static void send_data(URL_RECORD * pR)
@@ -534,9 +596,14 @@ static void send_data(URL_RECORD * pR)
 		   "Content-Length: %d \r\n\r\n%s"
 		    , pR->context,pR->host_name, strlen(data), data);
 
-//   int r = write(pR->fd, header, strlen(header));
-   int r = send(pR->fd, header, strlen(header), MSG_DONTWAIT);
+   int r = write(pR->fd, header, strlen(header));
+//   int r = send(pR->fd, header, strlen(header), MSG_DONTWAIT);
    printf("[INFO] fd:%d   ret:%d   errno:%d\n", pR->fd, r, errno);
+   if(errno == EBADF)
+   {
+	close(pR->fd);
+	pR->fd = -1;
+   }
    free(data);
    free(header);
 }

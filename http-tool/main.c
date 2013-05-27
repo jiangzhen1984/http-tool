@@ -81,7 +81,7 @@ int main(int argc, char ** argv)
     //release_url_records();
     while(1)
     {
-        sleep(0xffffff);
+        sleep(0x7fffff);
     }
 	
     return 0;
