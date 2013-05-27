@@ -23,6 +23,7 @@ typedef enum {
 typedef enum {
     UNAVAILABLE,
     AVAILABLE,
+    NO_SUCH_CONTEXT,
 } HOST_STATE;
 
 typedef enum {
@@ -30,6 +31,7 @@ typedef enum {
     TESTING,
     TESTED
 } TEST_STATE;
+
 
 typedef struct {
     int fd;

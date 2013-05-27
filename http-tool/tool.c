@@ -184,7 +184,15 @@ void add_record(char * record)
                     char * url = (char *) malloc(len);
                     memcpy(url, &record[start_pos],len);
                     url[len-1] ='\0';
-                    send_url = url;
+                    if (send_url == NULL)
+                    {
+                        send_url = url;
+                    }
+                    else
+                    {
+                        dst_url = url;
+                        break;
+                    }
                      
                }
                start_pos = end_pos;
@@ -206,6 +214,11 @@ void add_record(char * record)
         end_pos ++;
 	}
 
+    if(send_url == NULL || dst_url ==NULL)
+    {
+        printf("[ERROR] incorrect record: %s\n", record);
+        return;
+    }
 	g_head[current_idx].send_url = send_url;
     // TODO get hostname
 	g_head[current_idx].dst_url = dst_url;
@@ -221,6 +234,23 @@ void add_record(char * record)
         pch += 7;
         char * phstart = pch ;
         pch = strstr(pch, "/");
+        if (pch ==NULL)
+        {
+            int len = strlen(phstart);
+            char * hostname = (char * ) malloc(len+1);
+            memset(hostname, 0, len+1);
+            memcpy(hostname, phstart, len);
+            hostname[len] ='\0';
+            g_head[current_idx].host_name = hostname;
+
+            char * context = (char * )malloc(2);
+            memset(context, 0, 2);
+            context[0] ='/';
+            context[1] = '\0';
+            g_head[current_idx].context = context;
+        }
+        else
+        {
         *pch ='\0';
         int len = strlen(phstart);
         char * hostname = (char * ) malloc(len+1);
@@ -237,9 +267,10 @@ void add_record(char * record)
         memcpy(context, pch+1, len-1);
         context[len] = '\0';
         g_head[current_idx].context = context;
+        }
     }
    
-    printf("======= record count:%d, %d    %s\n", g_count, current_idx, g_head[current_idx].host_name);
+    printf("======= record count:%d, %d    %s   %s \n", g_count, current_idx, g_head[current_idx].host_name, g_head[current_idx].dst_url);
     current_idx++;
 }
 
@@ -473,9 +504,9 @@ static void send_data(URL_RECORD * pR)
 
     if(pR->fd <0 || pR->is_opened != OPENED || pR->is_avl != AVAILABLE)
     {
-	printf("[ERROR]%s socket doesn't open    %d    %d   %d \n",__FUNCTION__, pR->fd, pR->is_opened, pR->is_avl);
+	    printf("[ERROR]%s socket doesn't open    %d    %d   %d \n",__FUNCTION__, pR->fd, pR->is_opened, pR->is_avl);
 	//TODO open socket
-	return;
+	    return;
     }
     if(source == NULL || *source =='\0')
     {
