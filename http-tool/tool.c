@@ -325,9 +325,9 @@ static void * examine_host(URL_RECORD * pR)
          memcpy(h, buf, strlen(buf));
          h[strlen(buf)] ='\0';
          pR->host = h;
-        create_socket(pR);// host);
-        send_data(pR);
-        read_response(pR);
+    //    create_socket(pR);// host);
+     //   send_data(pR);
+      //  read_response(pR);
     } else {
 	printf("[ERROR] can't get host:%s\n", pR->host_name);
         return;
@@ -386,6 +386,10 @@ static void create_socket(URL_RECORD * pR)
     if(pR == NULL || pR->host == NULL || *(pR->host)=='\0')//|| host == NULL)
     {
         printf("[ERROR] %s incorrect parameter\n", __FUNCTION__);
+        return;
+    }
+    if(pR->is_avl == NO_SUCH_CONTEXT)
+    {
         return;
     }
     int sockfd;
@@ -492,11 +496,11 @@ static void * send_request_thread(struct range * p_range)
 			if(mod - 30 == 0)
 			{
 				mod = 0;
-      				usleep(30000);
+      				//usleep(30000);
 			}
 		}
 		
-		sleep(1);
+		//sleep(1);
 	}
 	
 }
@@ -586,13 +590,14 @@ static void send_data(URL_RECORD * pR)
    data = (char *) malloc(total_len);
    memset(data, 0, total_len);
 
-   sprintf(data, "%s%s%d%s%s%s",data_start, source, g_random, data_middle, pR->dst_url, data_end); 
+   sprintf(data, "%s%s?%d=%d&%d=%d%s%s%s",data_start, source, g_random, g_random, g_random, g_random,data_middle, pR->dst_url, data_end); 
 
    header = (char *) malloc(4000);
    sprintf(header, "POST %s HTTP/1.1\r\n"
 		   "HOST:%s\r\nUser-Agent: Mozilla/5.0(Linux)\r\n"
 		   "Accept: text/html, application/xhtml+xml\r\n"
-                   "Connection: keep-alive\r\n"
+           "Connection: keep-alive\r\n"
+           "Context-Type: text/xml\r\n"
 		   "Content-Length: %d \r\n\r\n%s"
 		    , pR->context,pR->host_name, strlen(data), data);
 

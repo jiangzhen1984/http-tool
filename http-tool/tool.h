@@ -16,7 +16,7 @@
 
 #define THREAD_COUNT 4
 
-#define RECORDS_PER_THREAD 50
+#define RECORDS_PER_THREAD 20
 
 typedef enum {
     NOT_OPENED,
