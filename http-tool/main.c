@@ -70,6 +70,7 @@ int main(int argc, char ** argv)
 		exit(1);
 	}
 
+    start_counter_worker();
 	load_url_list(f_path);
 	
        set_source_url(*++argv);

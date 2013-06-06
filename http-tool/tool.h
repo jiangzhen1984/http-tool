@@ -36,6 +36,15 @@ typedef enum {
 } TEST_STATE;
 
 
+typedef enum {
+    VERY_FAST,
+    FAST,
+    MIDDLE,
+    LOW_MIDDLE,
+    SLOW,
+} SPEED;
+
+
 typedef struct {
     int fd;
     unsigned char  is_opened;
@@ -46,6 +55,8 @@ typedef struct {
     char * send_url;
     char * dst_url;
     char * host;
+    unsigned char is_readed_response;
+    SPEED sp;
 } URL_RECORD;
 
 
@@ -67,6 +78,8 @@ void start_test();
 
 void start_shoot();
 
+
+void start_counter_worker();
 
 
 #endif

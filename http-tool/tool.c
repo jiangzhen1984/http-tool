@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <time.h>
 
 #ifdef LINUX
     #include <fcntl.h>
@@ -71,6 +72,15 @@ static void * send_request_thread(struct range * p_range);
 
 static void read_response(URL_RECORD * pR);
 
+
+static long long g_counter = 0;
+
+
+
+static void add_counter()
+{
+    g_counter ++;
+}
 
 
 
@@ -485,13 +495,43 @@ static void * send_request_thread(struct range * p_range)
 		for(; i< end; i++, mod++)
 		{
 			URL_RECORD * pR = &g_head[i];
-			if(pR !=NULL)
+			if(pR !=NULL && pR->host != NULL )
 			{
+                if(pR->sp == SLOW)
+                {
+                    //TODO skip 
+                    continue;
+                }
+                add_counter();
+                clock_t t;
+                t = clock();
 				create_socket(pR);
 				send_data(pR);
-				read_response(pR);
+                if (!pR->is_readed_response)
+                {
+				    read_response(pR);
+                }
+                t = clock() - t;
+                float cost = ((float) t) /CLOCKS_PER_SEC * (float)100;
+                if( cost< 100)
+                {
+                    pR->sp = VERY_FAST;
+                }
+                else if( cost >=100 && cost <= 300)
+                {
+                    pR->sp = FAST;
+                }
+                else if( cost >300 && cost <= 500)
+                {
+                    pR->sp = MIDDLE;
+                }
+                else
+                {
+                    pR->sp = SLOW;
+                }
+                printf("==send host %s coust:%f  speed-level:%d\n", pR->host, cost, pR->sp);
 				//TODO close socket
-      				usleep(30);
+      			usleep(30);
 			}
 			if(mod - 30 == 0)
 			{
@@ -611,4 +651,37 @@ static void send_data(URL_RECORD * pR)
    }
    free(data);
    free(header);
+   pR->is_readed_response = 1;
 }
+
+
+void * counter_thread()
+{
+    char buf[200];
+    FILE * p_file;
+    while(1)
+    {
+        time_t rawtime;
+        struct tm * timeinfo;
+
+        time (&rawtime);
+        timeinfo = localtime (&rawtime);
+        memset(buf, 0, 200);
+        p_file = fopen("/tmp/counter.log", "a");
+        if(p_file != NULL)
+        {
+            
+           sprintf(buf, " %s   counter:%d\n", asctime(timeinfo), g_counter); 
+           fputs(buf, p_file);
+           fclose(p_file);
+        }
+        sleep(1);
+    }
+}
+
+void start_counter_worker()
+{
+    pthread_t tid;
+    pthread_create(&tid, NULL, counter_thread, NULL);
+}
+
