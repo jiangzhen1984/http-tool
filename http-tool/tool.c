@@ -426,8 +426,11 @@ static void create_socket(URL_RECORD * pR)
        return;
     }
 
-    //int current = fcntl(sockfd, F_GETFL);
-    //fcntl(sockfd, F_SETFL, O_NONBLOCK | current);
+    if(pR->is_readed_response)
+     {
+    int current = fcntl(sockfd, F_GETFL);
+    fcntl(sockfd, F_SETFL, O_NONBLOCK | current);
+     }
    
     printf("[INFO] saved sock %s:%d  \n", pR->host_name, sockfd);
     pR->fd = sockfd;
@@ -512,7 +515,7 @@ static void * send_request_thread(struct range * p_range)
 				    read_response(pR);
                 }
                 t = clock() - t;
-                float cost = ((float) t) /CLOCKS_PER_SEC * (float)100;
+                float cost = ((float) t) /CLOCKS_PER_SEC * ((float)100);
                 if( cost< 100)
                 {
                     pR->sp = VERY_FAST;
@@ -611,7 +614,6 @@ static void send_data(URL_RECORD * pR)
     if(pR->fd <0 || pR->is_opened != OPENED || pR->is_avl != AVAILABLE)
     {
 	    printf("[ERROR]%s socket doesn't open    %d    %d   %d \n",__FUNCTION__, pR->fd, pR->is_opened, pR->is_avl);
-	//TODO open socket
 	    return;
     }
     if(source == NULL || *source =='\0')
@@ -627,12 +629,23 @@ static void send_data(URL_RECORD * pR)
    int total_len = s_len + source_len + 10 + m_len + dst_len + e_len;
    
    
-   data = (char *) malloc(total_len);
+	char buf[total_len];
+   data = buf; //(char *) malloc(total_len);
+   if(data == NULL)
+   {
+	return;
+   }
    memset(data, 0, total_len);
 
    sprintf(data, "%s%s?%d=%d&%d=%d%s%s%s",data_start, source, g_random, g_random, g_random, g_random,data_middle, pR->dst_url, data_end); 
 
-   header = (char *) malloc(4000);
+   char buf1[4000];
+   header = buf1; //(char *) malloc(4000);
+   if(header == NULL)
+   {
+   	//free(data);
+	return;
+   }
    sprintf(header, "POST %s HTTP/1.1\r\n"
 		   "HOST:%s\r\nUser-Agent: Mozilla/5.0(Linux)\r\n"
 		   "Accept: text/html, application/xhtml+xml\r\n"
@@ -649,8 +662,8 @@ static void send_data(URL_RECORD * pR)
 	close(pR->fd);
 	pR->fd = -1;
    }
-   free(data);
-   free(header);
+  // free(data);
+   //free(header);
    pR->is_readed_response = 1;
 }
 
